@@ -26,13 +26,11 @@ def health_check():
 
 def run_flask():
   port = int(os.environ.get('PORT', 10000))
-  # Dùng Werkzeug WSGI server tích hợp sẵn của Flask
   from werkzeug.serving import run_simple
 
   run_simple('0.0.0.0', port, app, use_reloader=False, use_debugger=False)
 
 
-# Chạy Flask ở thread riêng biệt hoàn toàn
 flask_thread = threading.Thread(target=run_flask, daemon=True)
 flask_thread.start()
 
@@ -78,4 +76,17 @@ def chuan_hoa_user_data(value: Any) -> dict[str, Any]:
   }
 
 
-# Giữ nguyên các phần lệnh bot bên dưới của bạn...
+@bot.event
+async def on_ready():
+  print(f'Bot đã đăng nhập thành công: {bot.user}')
+
+
+# --- KÍCH HOẠT CHẠY BOT ---
+TOKEN = os.getenv('DISCORD_TOKEN')
+
+if __name__ == '__main__':
+  if TOKEN:
+    bot.run(TOKEN)
+  else:
+    print('Lỗi: Chưa cài đặt DISCORD_TOKEN trong Environment của Render!')
+    
