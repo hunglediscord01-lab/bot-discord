@@ -70,6 +70,7 @@ async def on_ready():
   print(f'Bot đã đăng nhập thành công: {bot.user}')
 
 
+# 1. LỆNH SETUP QUỸ TIỀN
 @bot.command(name='setup')
 async def setup(ctx: commands.Context, so_tien: int):
   user_id = str(ctx.author.id)
@@ -78,7 +79,7 @@ async def setup(ctx: commands.Context, so_tien: int):
   data[user_id] = {
       'tong_tien': so_tien,
       'lich_su': [{
-          'loai': 'SETUP',
+          'loai': 'KHOI_TAO',
           'so_tien': so_tien,
           'thoi_gian': lay_thoi_gian_vn(),
       }],
@@ -107,6 +108,83 @@ async def setup(ctx: commands.Context, so_tien: int):
   await ctx.send(embed=embed)
 
 
+# 2. LỆNH CỘNG TIỀN
+@bot.command(name='cong')
+async def cong(ctx: commands.Context, so_tien: int, *, ly_do: str = 'Không có'):
+  user_id = str(ctx.author.id)
+  data = await doc_du_lieu()
+
+  if user_id not in data:
+    await ctx.send(
+        f'❌ {ctx.author.mention} Bạn chưa thiết lập quỹ tiền! Dùng lệnh'
+        ' `!setup <số_tiền>` trước.'
+    )
+    return
+
+  data[user_id]['tong_tien'] += so_tien
+  data[user_id]['lich_su'].append({
+      'loai': f'CỘNG ({ly_do})',
+      'so_tien': so_tien,
+      'thoi_gian': lay_thoi_gian_vn(),
+  })
+  await luu_du_lieu(data)
+
+  embed = discord.Embed(
+      title='📈 CỘNG TIỀN VÀO QUỸ', color=discord.Color.green()
+  )
+  embed.add_field(
+      name='💵 Số tiền cộng', value=f'+{so_tien:,} VNĐ', inline=False
+  )
+  embed.add_field(name='📝 Lý do', value=ly_do, inline=False)
+  embed.add_field(
+      name='💰 Tổng dư mới',
+      value=f'**{data[user_id]["tong_tien"]:,} VNĐ**',
+      inline=False,
+  )
+  embed.add_field(
+      name='⏰ Thời gian', value=f'`{lay_thoi_gian_vn()}`', inline=False
+  )
+  await ctx.send(embed=embed)
+
+
+# 3. LỆNH TRỪ TIỀN
+@bot.command(name='tru')
+async def tru(ctx: commands.Context, so_tien: int, *, ly_do: str = 'Không có'):
+  user_id = str(ctx.author.id)
+  data = await doc_du_lieu()
+
+  if user_id not in data:
+    await ctx.send(
+        f'❌ {ctx.author.mention} Bạn chưa thiết lập quỹ tiền! Dùng lệnh'
+        ' `!setup <số_tiền>` trước.'
+    )
+    return
+
+  data[user_id]['tong_tien'] -= so_tien
+  data[user_id]['lich_su'].append({
+      'loai': f'TRỪ ({ly_do})',
+      'so_tien': so_tien,
+      'thoi_gian': lay_thoi_gian_vn(),
+  })
+  await luu_du_lieu(data)
+
+  embed = discord.Embed(title='📉 TRỪ TIỀN TỪ QUỸ', color=discord.Color.red())
+  embed.add_field(
+      name='💸 Số tiền trừ', value=f'-{so_tien:,} VNĐ', inline=False
+  )
+  embed.add_field(name='📝 Lý do', value=ly_do, inline=False)
+  embed.add_field(
+      name='💰 Tổng dư còn lại',
+      value=f'**{data[user_id]["tong_tien"]:,} VNĐ**',
+      inline=False,
+  )
+  embed.add_field(
+      name='⏰ Thời gian', value=f'`{lay_thoi_gian_vn()}`', inline=False
+  )
+  await ctx.send(embed=embed)
+
+
+# 4. LỆNH XEM SỐ DƯ
 @bot.command(name='xem')
 async def xem(ctx: commands.Context):
   user_id = str(ctx.author.id)
@@ -121,13 +199,15 @@ async def xem(ctx: commands.Context):
 
   tong_tien = data[user_id].get('tong_tien', 0)
   embed = discord.Embed(
-      title='📊 THÔNG TIN TÀI CHÍNH', color=discord.Color.green()
+      title='📊 THÔNG TIN TÀI CHÍNH', color=discord.Color.gold()
   )
   embed.add_field(
       name='👤 Chủ tài khoản', value=ctx.author.mention, inline=False
   )
   embed.add_field(
-      name='💵 Tổng số tiền hiện tại', value=f'**{tong_tien:,} VNĐ**', inline=False
+      name='💵 Tổng số tiền hiện tại',
+      value=f'**{tong_tien:,} VNĐ**',
+      inline=False,
   )
   embed.add_field(
       name='⏰ Cập nhật lúc', value=f'`{lay_thoi_gian_vn()}`', inline=False
@@ -135,6 +215,7 @@ async def xem(ctx: commands.Context):
   await ctx.send(embed=embed)
 
 
+# 5. LỆNH XEM LỊCH SỬ GIAO DỊCH
 @bot.command(name='lichsu')
 async def lichsu(ctx: commands.Context):
   user_id = str(ctx.author.id)
@@ -144,17 +225,36 @@ async def lichsu(ctx: commands.Context):
     await ctx.send(f'❌ {ctx.author.mention} Chưa có lịch sử giao dịch nào.')
     return
 
-  lich_su_list = data[user_id]['lich_su'][-5:]  # Lấy 5 giao dịch gần nhất
+  lich_su_list = data[user_id]['lich_su'][-10:]  # Lấy 10 giao dịch gần nhất
   noi_dung = ''
-  for item in lich_su_list:
-    noi_dung += f"• **{item['loai']}**: {item['so_tien']:,} VNĐ (`{item['thoi_gian']}`)\n"
+  for idx, item in enumerate(reversed(lich_su_list), 1):
+    noi_dung += f"{idx}. **{item['loai']}**: `{item['so_tien']:,} VNĐ` - *{item['thoi_gian']}*\n"
 
   embed = discord.Embed(
       title='📜 LỊCH SỬ GIAO DỊCH GẦN ĐÂY',
       description=noi_dung,
-      color=discord.Color.gold(),
+      color=discord.Color.purple(),
   )
   await ctx.send(embed=embed)
+
+
+# 6. LỆNH RESET LẠI TÀI KHOẢN
+@bot.command(name='reset')
+async def reset(ctx: commands.Context):
+  user_id = str(ctx.author.id)
+  data = await doc_du_lieu()
+
+  if user_id in data:
+    del data[user_id]
+    await luu_du_lieu(data)
+    await ctx.send(
+        f'🔄 {ctx.author.mention} Đã dọn dẹp và reset toàn bộ dữ liệu tài'
+        ' chính của bạn thành công!'
+    )
+  else:
+    await ctx.send(
+        f'❌ {ctx.author.mention} Bạn chưa có dữ liệu nào để reset.'
+    )
 
 
 # --- KÍCH HOẠT CHẠY BOT ---
