@@ -77,8 +77,7 @@ class HistoryPaginator(View):
 
     def get_embed(self):
         embed = discord.Embed(
-            title="📜 LỊCH SỬ THU CHI TÀI CHÍNH",
-            description=f"Lịch sử giao dịch của **{self.author.display_name}** (Trang {self.current_page + 1}/{self.total_pages}):",
+            title="📜 LỊCH SỬ GIAO DỊCH GẦN ĐÂY",
             color=discord.Color.purple()
         )
         
@@ -86,15 +85,18 @@ class HistoryPaginator(View):
         end = start + self.per_page
         page_items = self.history[start:end]
 
-        for item in page_items:
-            icon = "🟢 +" if item['loai'] == 'CONG' else ("🔴 -" if item['loai'] == 'TRU' else ("👑 Admin set:" if item['loai'] == 'ADMIN_SET' else "🚀 Khởi tạo:"))
-            li_do = item.get('li_do', 'Không có lí do')
-            embed.add_field(
-                name=f"{icon} {item['so_tien']:,} VNĐ",
-                value=f"📝 Lí do: `{li_do}`\n⏱️ `{item['thoi_gian']}`",
-                inline=False
-            )
-        embed.set_footer(text=f"Tổng số giao dịch: {len(self.history)}")
+        description_lines = []
+        for idx, item in enumerate(page_items, start=start + 1):
+            loai_str = "CỘNG" if item['loai'] in ['CONG', 'KHOI_TAO'] else ("TRỪ" if item['loai'] == 'TRU' else "ADMIN SET")
+            li_do = item.get('li_do', 'Không có')
+            so_tien_fmt = f"`{item['so_tien']:,} VNĐ`"
+            thoi_gian_fmt = f"*`{item['thoi_gian']}`*"
+            
+            line = f"**{idx}.** **{loai_str} ({li_do}):** {so_tien_fmt} - {thoi_gian_fmt}"
+            description_lines.append(line)
+
+        embed.description = "\n\n".join(description_lines)
+        embed.set_footer(text=f"Trang {self.current_page + 1}/{self.total_pages} • Tổng số giao dịch: {len(self.history)}")
         return embed
 
     @discord.ui.button(label="◀ Trang trước", style=discord.ButtonStyle.primary)
@@ -171,7 +173,7 @@ async def xem(ctx):
     await ctx.send(embed=embed)
 
 @bot.command(name='cong')
-async def cong(ctx, so_tien: int, *, li_do: str = "Không có lí do"):
+async def cong(ctx, so_tien: int, *, li_do: str = "Không có"):
     data = await doc_du_lieu()
     user_id = str(ctx.author.id)
     
@@ -179,13 +181,23 @@ async def cong(ctx, so_tien: int, *, li_do: str = "Không có lí do"):
         return await ctx.send("❌ Bạn chưa khởi tạo quỹ! Dùng lệnh `!setup <số_tiền>` trước.")
 
     data[user_id]['tong_tien'] += so_tien
-    data[user_id]['lich_su'].append({'loai': 'CONG', 'so_tien': so_tien, 'li_do': li_do, 'thoi_gian': lay_thoi_gian_vn()})
+    thoi_gian_now = lay_thoi_gian_vn()
+    data[user_id]['lich_su'].append({'loai': 'CONG', 'so_tien': so_tien, 'li_do': li_do, 'thoi_gian': thoi_gian_now})
     await luu_du_lieu(data)
     
-    await ctx.send(f"🟢 **+ {so_tien:,} VNĐ** | Lí do: `{li_do}`\n💰 Số dư mới: **{data[user_id]['tong_tien']:,} VNĐ**")
+    embed = discord.Embed(
+        title="📈 CỘNG TIỀN VÀO QUỸ",
+        color=discord.Color.green()
+    )
+    embed.add_field(name="💵 Số tiền cộng", value=f"+{so_tien:,} VNĐ", inline=False)
+    embed.add_field(name="📝 Lý do", value=li_do, inline=False)
+    embed.add_field(name="💰 Tổng dư mới", value=f"**{data[user_id]['tong_tien']:,} VNĐ**", inline=False)
+    embed.add_field(name="⏰ Thời gian", value=f"`{thoi_gian_now}`", inline=False)
+
+    await ctx.send(embed=embed)
 
 @bot.command(name='tru')
-async def tru(ctx, so_tien: int, *, li_do: str = "Không có lí do"):
+async def tru(ctx, so_tien: int, *, li_do: str = "Không có"):
     data = await doc_du_lieu()
     user_id = str(ctx.author.id)
     
@@ -193,10 +205,20 @@ async def tru(ctx, so_tien: int, *, li_do: str = "Không có lí do"):
         return await ctx.send("❌ Bạn chưa khởi tạo quỹ! Dùng lệnh `!setup <số_tiền>` trước.")
 
     data[user_id]['tong_tien'] -= so_tien
-    data[user_id]['lich_su'].append({'loai': 'TRU', 'so_tien': so_tien, 'li_do': li_do, 'thoi_gian': lay_thoi_gian_vn()})
+    thoi_gian_now = lay_thoi_gian_vn()
+    data[user_id]['lich_su'].append({'loai': 'TRU', 'so_tien': so_tien, 'li_do': li_do, 'thoi_gian': thoi_gian_now})
     await luu_du_lieu(data)
     
-    await ctx.send(f"🔴 **- {so_tien:,} VNĐ** | Lí do: `{li_do}`\n💰 Số dư còn lại: **{data[user_id]['tong_tien']:,} VNĐ**")
+    embed = discord.Embed(
+        title="📉 TRỪ TIỀN TỪ QUỸ",
+        color=discord.Color.red()
+    )
+    embed.add_field(name="💸 Số tiền trừ", value=f"-{so_tien:,} VNĐ", inline=False)
+    embed.add_field(name="📝 Lý do", value=li_do, inline=False)
+    embed.add_field(name="💰 Tổng dư còn lại", value=f"**{data[user_id]['tong_tien']:,} VNĐ**", inline=False)
+    embed.add_field(name="⏰ Thời gian", value=f"`{thoi_gian_now}`", inline=False)
+
+    await ctx.send(embed=embed)
 
 @bot.command(name='lichsu')
 async def lichsu(ctx):
@@ -226,7 +248,6 @@ async def reset(ctx):
 async def setmoney(ctx, member: discord.Member, so_tien_moi: int):
     admins = await doc_danh_sach_admin()
     
-    # Nếu không phải Admin thì im lặng tuyệt đối
     if ctx.author.id not in admins:
         return
 
@@ -246,10 +267,10 @@ async def setmoney(ctx, member: discord.Member, so_tien_moi: int):
 
     await luu_du_lieu(data)
     
-    # Gửi phản hồi và tự động xóa sau 3 giây
     await ctx.send(
         f"👑 **[ADMIN]** Đã chỉnh sửa số dư của {member.mention} thành **{so_tien_moi:,} VNĐ**!",
         delete_after=3
     )
 
 bot.run(os.getenv('DISCORD_TOKEN'))
+    
