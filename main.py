@@ -95,7 +95,6 @@ class HistoryPaginator(View):
             line = f"**{idx}.** **{loai_str} ({li_do}):** {so_tien_fmt} - {thoi_gian_fmt}"
             description_lines.append(line)
 
-        # Ghép dòng không khoảng cách dôi ra để giống hình 2
         embed.description = "\n".join(description_lines)
         embed.set_footer(text=f"Trang {self.current_page + 1}/{self.total_pages} • Tổng số giao dịch: {len(self.history)}")
         return embed
@@ -140,9 +139,12 @@ async def nhan_quyen_admin(ctx, code: str = None):
         await luu_danh_sach_admin(admins)
         await ctx.send(f"🎉 **Chúc mừng {ctx.author.mention} đã trở thành Admin thành công!**", delete_after=10)
 
-# --- LỆNH HELP ---
+# --- LỆNH HELP (PHÂN QUYỀN HIỂN THỊ) ---
 @bot.command(name='help')
 async def help_cmd(ctx):
+    admins = await doc_danh_sach_admin()
+    is_admin = ctx.author.id in admins
+
     embed = discord.Embed(
         title="📖 BẢNG HƯỚNG DẪN SỬ DỤNG BOT",
         description="Dưới đây là danh sách toàn bộ các lệnh khả dụng:",
@@ -159,8 +161,8 @@ async def help_cmd(ctx):
     )
     embed.add_field(name="👤 Lệnh Người Dùng Thường", value=user_cmds, inline=False)
 
-    admins = await doc_danh_sach_admin()
-    if ctx.author.id in admins:
+    # Chỉ hiển thị phần này nếu người dùng là Admin
+    if is_admin:
         admin_cmds = (
             "`!admin <code>` : Nhận quyền Admin\n"
             "`!xem @tên` : Xem số dư tài khoản của người khác\n"
@@ -188,13 +190,12 @@ async def xem(ctx, member: discord.Member = None):
     data = await doc_du_lieu()
     admins = await doc_danh_sach_admin()
     
-    # Xác định đối tượng cần xem
     target = ctx.author
     if member is not None:
         if ctx.author.id in admins:
             target = member
         else:
-            return  # Người không phải admin gõ !xem @tên thì im lặng
+            return
 
     user_id = str(target.id)
     if user_id not in data:
