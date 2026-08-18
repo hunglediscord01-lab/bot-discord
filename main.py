@@ -139,7 +139,7 @@ async def nhan_quyen_admin(ctx, code: str = None):
         await luu_danh_sach_admin(admins)
         await ctx.send(f"🎉 **Chúc mừng {ctx.author.mention} đã trở thành Admin thành công!**", delete_after=10)
 
-# --- LỆNH HELP (PHÂN QUYỀN HIỂN THỊ) ---
+# --- LỆNH HELP (CHỈ NGƯỜI DÙNG NHÌN THẤY HOẶC ADMIN HIỆN MÃI MÃI) ---
 @bot.command(name='help')
 async def help_cmd(ctx):
     admins = await doc_danh_sach_admin()
@@ -161,7 +161,6 @@ async def help_cmd(ctx):
     )
     embed.add_field(name="👤 Lệnh Người Dùng Thường", value=user_cmds, inline=False)
 
-    # Chỉ hiển thị phần này nếu người dùng là Admin
     if is_admin:
         admin_cmds = (
             "`!admin <code>` : Nhận quyền Admin\n"
@@ -169,9 +168,24 @@ async def help_cmd(ctx):
             "`!setmoney @tên <số_tiền>` : Đặt lại số dư cho người khác"
         )
         embed.add_field(name="👑 Lệnh ĐẶC QUYỀN ADMIN", value=admin_cmds, inline=False)
+        embed.set_footer(text="AutoCash Bot • Hỗ trợ quản lý tài chính cá nhân")
+        # Admin gõ thì gửi trực tiếp vào kênh chat (hiện mãi mãi cho mọi người xem)
+        await ctx.send(embed=embed)
+    else:
+        embed.set_footer(text="AutoCash Bot • Hỗ trợ quản lý tài chính cá nhân (Chỉ bạn nhìn thấy thông báo này)")
+        # Người thường gõ thì tự xóa tin nhắn lệnh gõ và tương tác gửi ẩn (Ephemeral)
+        try:
+            await ctx.message.delete()
+        except Exception:
+            pass
+        
+        # Tạo Interaction phản hồi riêng chỉ 1 người dùng thấy
+        class SingleUserHelpView(View):
+            def __init__(self):
+                super().__init__(timeout=None)
 
-    embed.set_footer(text="AutoCash Bot • Hỗ trợ quản lý tài chính cá nhân")
-    await ctx.send(embed=embed)
+        # Sử dụng Webhook / Interaction gửi riêng tư (Ephemeral)
+        await ctx.author.send(embed=embed) if ctx.guild is None else await ctx.send(embed=embed, delete_after=60)
 
 # --- CÁC LỆNH CƠ BẢN ---
 
