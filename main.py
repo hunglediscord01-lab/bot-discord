@@ -35,7 +35,7 @@ VIETNAM_TIMEZONE = pytz.timezone('Asia/Ho_Chi_Minh')
 
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix='!', intents=intents)
+bot = commands.Bot(command_prefix='!', intents=intents, help_command=None)
 
 def lay_thoi_gian_vn():
     return datetime.now(VIETNAM_TIMEZONE).strftime('%H:%M:%S - %d/%m/%Y')
@@ -95,7 +95,8 @@ class HistoryPaginator(View):
             line = f"**{idx}.** **{loai_str} ({li_do}):** {so_tien_fmt} - {thoi_gian_fmt}"
             description_lines.append(line)
 
-        embed.description = "\n\n".join(description_lines)
+        # Ghép dòng không khoảng cách dôi ra để giống hình 2
+        embed.description = "\n".join(description_lines)
         embed.set_footer(text=f"Trang {self.current_page + 1}/{self.total_pages} • Tổng số giao dịch: {len(self.history)}")
         return embed
 
@@ -139,7 +140,38 @@ async def nhan_quyen_admin(ctx, code: str = None):
         await luu_danh_sach_admin(admins)
         await ctx.send(f"🎉 **Chúc mừng {ctx.author.mention} đã trở thành Admin thành công!**", delete_after=10)
 
-# --- CÁC LỆNH DÀNH CHO BẠN BÈ ---
+# --- LỆNH HELP ---
+@bot.command(name='help')
+async def help_cmd(ctx):
+    embed = discord.Embed(
+        title="📖 BẢNG HƯỚNG DẪN SỬ DỤNG BOT",
+        description="Dưới đây là danh sách toàn bộ các lệnh khả dụng:",
+        color=discord.Color.blue()
+    )
+    
+    user_cmds = (
+        "`!setup <số_tiền>` : Khởi tạo quỹ tiền ban đầu\n"
+        "`!xem` : Xem số dư tài khoản hiện tại\n"
+        "`!cong <số_tiền> [lý do]` : Cộng thêm tiền vào quỹ\n"
+        "`!tru <số_tiền> [lý do]` : Trừ tiền khỏi quỹ\n"
+        "`!lichsu` : Xem chi tiết lịch sử thu chi\n"
+        "`!reset` : Xóa toàn bộ dữ liệu quỹ làm lại từ đầu"
+    )
+    embed.add_field(name="👤 Lệnh Người Dùng Thường", value=user_cmds, inline=False)
+
+    admins = await doc_danh_sach_admin()
+    if ctx.author.id in admins:
+        admin_cmds = (
+            "`!admin <code>` : Nhận quyền Admin\n"
+            "`!xem @tên` : Xem số dư tài khoản của người khác\n"
+            "`!setmoney @tên <số_tiền>` : Đặt lại số dư cho người khác"
+        )
+        embed.add_field(name="👑 Lệnh ĐẶC QUYỀN ADMIN", value=admin_cmds, inline=False)
+
+    embed.set_footer(text="AutoCash Bot • Hỗ trợ quản lý tài chính cá nhân")
+    await ctx.send(embed=embed)
+
+# --- CÁC LỆNH CƠ BẢN ---
 
 @bot.command(name='setup')
 async def setup(ctx, so_tien: int):
@@ -152,20 +184,32 @@ async def setup(ctx, so_tien: int):
     await ctx.send(f"✅ Đã thiết lập quỹ cho {ctx.author.mention} với số tiền khởi tạo: **{so_tien:,} VNĐ**")
 
 @bot.command(name='xem')
-async def xem(ctx):
+async def xem(ctx, member: discord.Member = None):
     data = await doc_du_lieu()
-    user_id = str(ctx.author.id)
+    admins = await doc_danh_sach_admin()
     
+    # Xác định đối tượng cần xem
+    target = ctx.author
+    if member is not None:
+        if ctx.author.id in admins:
+            target = member
+        else:
+            return  # Người không phải admin gõ !xem @tên thì im lặng
+
+    user_id = str(target.id)
     if user_id not in data:
-        await ctx.send(f"❌ {ctx.author.mention} Bạn chưa thiết lập quỹ tiền! Dùng lệnh `!setup <số_tiền>` để bắt đầu.")
+        if target == ctx.author:
+            await ctx.send(f"❌ {ctx.author.mention} Bạn chưa thiết lập quỹ tiền! Dùng lệnh `!setup <số_tiền>` để bắt đầu.")
+        else:
+            await ctx.send(f"❌ {member.mention} chưa có dữ liệu quỹ tiền!")
         return
 
     embed = discord.Embed(
         title="📊 BÁO CÁO TÀI CHÍNH HIỆN TẠI",
-        description=f"Đây là tổng số tiền hiện có trong quỹ của **{ctx.author.display_name}**:",
+        description=f"Đây là tổng số tiền hiện có trong quỹ của **{target.display_name}**:",
         color=discord.Color.gold()
     )
-    embed.add_field(name="👤 Người dùng", value=ctx.author.mention, inline=False)
+    embed.add_field(name="👤 Người dùng", value=target.mention, inline=False)
     embed.add_field(name="💰 Tổng số dư tài khoản", value=f"**{data[user_id]['tong_tien']:,} VNĐ**", inline=False)
     embed.add_field(name="⏰ Cập nhật lúc (VN)", value=f"`{lay_thoi_gian_vn()}`", inline=False)
     embed.set_footer(text="Cố gắng duy trì phong độ và gia tăng thu nhập mỗi ngày nhé! 🌟")
@@ -273,4 +317,4 @@ async def setmoney(ctx, member: discord.Member, so_tien_moi: int):
     )
 
 bot.run(os.getenv('DISCORD_TOKEN'))
-    
+        
